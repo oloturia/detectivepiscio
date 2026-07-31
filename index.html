@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Comic Reader</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f0f0f;
+      --surface:   #1a1a1a;
+      --surface2:  #242424;
+      --border:    #333;
+      --accent:    #e8c84a;
+      --accent2:   #b8973a;
+      --text:      #f0ece0;
+      --muted:     #888;
+      --radius:    6px;
+      --nav-h:     56px;
+      --sidebar-w: 260px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Georgia', serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ════════════════════════════════════════════
+       NAV — shared between landing and reader
+       The nav shows different controls per view,
+       controlled by body.in-reader class.
+    ════════════════════════════════════════════ */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      height: var(--nav-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 14px;
+      flex-shrink: 0;
+    }
+
+    .nav-title {
+      font-size: 0.95rem;
+      font-weight: bold;
+      color: var(--accent);
+      white-space: nowrap;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Generic icon button used in nav */
+    .icon-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text);
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 1.05rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .icon-btn:hover { background: var(--surface2); }
+
+    /* Chapter dropdown (reader only) */
+    #chapter-select {
+      appearance: none;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 28px 6px 10px;
+      border-radius: var(--radius);
+      font-size: 0.82rem;
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      max-width: 160px;
+    }
+    #chapter-select:focus { outline: 2px solid var(--accent); }
+
+    /*
+     * Nav slots: landing-controls are shown on landing,
+     * reader-controls are shown in the reader.
+     * Toggled via body.in-reader class (added by JS).
+     */
+    #nav-landing-controls { display: flex; align-items: center; gap: 10px; flex: 1; }
+    #nav-reader-controls  { display: none; align-items: center; gap: 10px; flex: 1; }
+
+    body.in-reader #nav-landing-controls { display: none; }
+    body.in-reader #nav-reader-controls  { display: flex; }
+
+    /* ════════════════════════════════════════════
+       VIEWS — only one visible at a time
+    ════════════════════════════════════════════ */
+    #view-landing { display: flex; flex-direction: column; flex: 1; }
+    #view-reader  { display: none; flex-direction: column; flex: 1; }
+
+    body.in-reader #view-landing { display: none; }
+    body.in-reader #view-reader  { display: flex; }
+
+    /* ════════════════════════════════════════════
+       LANDING PAGE
+    ════════════════════════════════════════════ */
+    .landing-hero {
+      text-align: center;
+      padding: 48px 16px 32px;
+    }
+    .landing-hero h1 {
+      font-size: clamp(1.6rem, 5vw, 2.8rem);
+      color: var(--accent);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .landing-hero p {
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    /* Divider line with label */
+    .section-label {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 24px 20px;
+      font-size: 0.68rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent2);
+    }
+    .section-label::before,
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /*
+     * Chapter grid — 3 fixed columns on desktop.
+     * On small screens (<600px) drops to 2, on very small (<380px) to 1.
+     * repeat(3, 1fr) = three equal columns.
+     */
+    .chapter-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      padding: 0 24px 48px;
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    @media (max-width: 600px) {
+      .chapter-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 0 14px 36px; }
+    }
+    @media (max-width: 380px) {
+      .chapter-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Each chapter card */
+    .ch-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+    .ch-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--accent2);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .ch-card:active { transform: translateY(-1px); }
+
+    /*
+     * Thumbnail container — fixed aspect ratio 2:3 (portrait, like a comic page).
+     * padding-bottom trick: makes the div always maintain that ratio
+     * regardless of the actual image size.
+     */
+    .ch-thumb {
+      position: relative;
+      padding-bottom: 150%;   /* height = 150% of width → 2:3 ratio */
+      background: var(--surface2);
+      overflow: hidden;
+    }
+    .ch-thumb img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;       /* crop to fill, no letterbox */
+      object-position: top;    /* show top of image (usually the important part) */
+      transition: transform 0.3s ease;
+    }
+    .ch-card:hover .ch-thumb img { transform: scale(1.04); }
+
+    /* Placeholder shown while thumbnail loads */
+    .ch-thumb-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      color: var(--border);
+    }
+
+    /* Card footer with chapter name and page count */
+    .ch-info {
+      padding: 10px 12px 12px;
+      border-top: 1px solid var(--border);
+    }
+    .ch-info .ch-name {
+      font-size: 0.88rem;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ch-info .ch-pages {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* ════════════════════════════════════════════
+       SIDEBAR (reader view)
+    ════════════════════════════════════════════ */
+    #sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 300;
+    }
+    #sidebar-overlay.open { display: block; }
+
+    #sidebar {
+      position: fixed;
+      top: 0; left: 0;
+      height: 100%;
+      width: var(--sidebar-w);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      z-index: 400;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(-100%);
+      transition: transform 0.25s ease;
+    }
+    #sidebar.open { transform: translateX(0); }
+
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 14px 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .sidebar-header span {
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent2);
+    }
+    #btn-close-sidebar {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: var(--radius);
+    }
+    #btn-close-sidebar:hover { color: var(--text); background: var(--surface2); }
+
+    #parts-list { overflow-y: auto; flex: 1; padding: 8px 0; }
+
+    .part-item {
+      display: flex;
+      flex-direction: column;
+      padding: 10px 16px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: background 0.12s, border-color 0.12s;
+      gap: 2px;
+    }
+    .part-item:hover { background: var(--surface2); }
+    .part-item.active { border-left-color: var(--accent); background: var(--surface2); }
+    .part-item .part-name { font-size: 0.88rem; color: var(--text); }
+    .part-item.active .part-name { color: var(--accent); }
+    .part-item .part-sub { font-size: 0.72rem; color: var(--muted); }
+
+    /* ════════════════════════════════════════════
+       READER MAIN AREA
+    ════════════════════════════════════════════ */
+    #reader-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 12px 40px;
+      gap: 10px;
+    }
+
+    #chapter-title {
+      font-size: 0.72rem;
+      color: var(--accent2);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    #comic-img {
+      max-width: 860px;
+      width: 100%;
+      max-height: calc(100vh - var(--nav-h) - 80px - 48px);
+      object-fit: contain;
+      display: block;
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      transition: opacity 0.18s ease;
+    }
+    #comic-img.loading { opacity: 0.25; }
+
+    #status-msg {
+      font-size: 0.88rem;
+      color: var(--muted);
+      text-align: center;
+      padding: 48px 0;
+    }
+
+    /* ── Footer — primary navigation bar ── */
+    #reader-footer {
+      background: var(--surface);
+      border-top: 2px solid var(--border);
+      padding: 10px 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      /* sticky at bottom so it's always reachable */
+      position: sticky;
+      bottom: 0;
+      z-index: 100;
+    }
+
+    /*
+     * Large arrow buttons — easy thumb targets on mobile.
+     * min-width + height 48px meets the 44px minimum touch target guideline.
+     */
+    .foot-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .foot-btn:hover:not(:disabled) { background: var(--accent); color: #000; border-color: var(--accent); }
+    .foot-btn:disabled { opacity: 0.3; cursor: default; }
+
+    /* Arrow buttons specifically — tall and wide */
+    .foot-arrow {
+      font-size: 1.4rem;
+      width: 56px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Center section: counter + go-to stacked vertically */
+    .foot-center {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    #foot-counter {
+      font-size: 0.82rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .goto-wrap {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    #goto-input {
+      width: 88px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 6px;
+      border-radius: var(--radius);
+      font-size: 0.82rem;
+      text-align: center;
+    }
+    #goto-input:focus { outline: 2px solid var(--accent); }
+    #goto-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 10px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 0.78rem;
+      transition: background 0.15s;
+    }
+    #goto-btn:hover { background: var(--accent); color: #000; border-color: var(--accent); }
+
+    /* ── Mobile tweaks ── */
+    @media (max-width: 480px) {
+      .nav-title { font-size: 0.78rem; }
+      #chapter-select { max-width: 100px; font-size: 0.75rem; }
+      #comic-img { max-height: calc(100vh - var(--nav-h) - 80px); }
+      .landing-hero { padding: 28px 16px 20px; }
+      .foot-arrow { width: 48px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════
+     NAV — content swaps between views
+════════════════════════════════════════════ -->
+<nav>
+  <!-- Landing nav: just the title -->
+  <div id="nav-landing-controls">
+    <span class="nav-title" id="comic-title-landing">Comic</span>
+  </div>
+
+  <!-- Reader nav: hamburger + title + back + chapter select only -->
+  <div id="nav-reader-controls">
+    <button class="icon-btn" id="btn-menu" aria-label="Open parts navigation">&#9776;</button>
+    <span class="nav-title" id="comic-title-reader">Comic</span>
+    <button class="icon-btn" id="btn-back" aria-label="Back to chapter list" title="Back to chapters" style="margin-left:auto">&#8249;</button>
+    <select id="chapter-select" aria-label="Select chapter"></select>
+  </div>
+</nav>
+
+<!-- ════════════════════════════════════════════
+     SIDEBAR (reader view)
+════════════════════════════════════════════ -->
+<div id="sidebar-overlay"></div>
+<aside id="sidebar" aria-label="Parts navigation">
+  <div class="sidebar-header">
+    <span>Quick navigation</span>
+    <button id="btn-close-sidebar" aria-label="Close sidebar">&#10005;</button>
+  </div>
+  <div id="parts-list"></div>
+</aside>
+
+<!-- ════════════════════════════════════════════
+     VIEW: LANDING
+════════════════════════════════════════════ -->
+<div id="view-landing">
+  <div class="landing-hero">
+    <h1 id="landing-title">Comic</h1>
+    <p id="landing-subtitle">Choose a chapter to start reading</p>
+  </div>
+  <div class="section-label">Chapters</div>
+  <!-- Chapter cards are injected here by JS -->
+  <div class="chapter-grid" id="chapter-grid"></div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     VIEW: READER
+════════════════════════════════════════════ -->
+<div id="view-reader">
+  <main id="reader-main">
+    <div id="chapter-title"></div>
+    <img id="comic-img" src="" alt="Comic page" />
+    <div id="status-msg">Loading…</div>
+  </main>
+
+  <footer id="reader-footer">
+    <!--
+      Footer is now the primary navigation bar.
+      Large prev/next buttons sit on the sides, easy to reach with thumbs.
+      Counter and go-to are centered between them.
+    -->
+    <button class="foot-btn foot-arrow" id="foot-prev" disabled>&#8592;</button>
+
+    <div class="foot-center">
+      <span id="foot-counter">— / —</span>
+      <div class="goto-wrap">
+        <label for="goto-input">p.</label>
+        <input id="goto-input" type="number" min="1" placeholder="?" aria-label="Go to page" />
+        <button id="goto-btn">Go</button>
+      </div>
+    </div>
+
+    <button class="foot-btn foot-arrow" id="foot-next" disabled>&#8594;</button>
+  </footer>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════════════
+const state = {
+  config:       null,
+  parts:        new Map(),  // folder → [{name, localPage}]
+  chapterIndex: 0,
+  pageIndex:    0,
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DOM REFS
+// ═══════════════════════════════════════════════════════════════════════════
+const elTitleLanding  = document.getElementById('landing-title');
+const elTitleReader   = document.getElementById('comic-title-reader');
+const elTitleNav      = document.getElementById('comic-title-landing');
+const elSubtitle      = document.getElementById('landing-subtitle');
+const elGrid          = document.getElementById('chapter-grid');
+const elSelect        = document.getElementById('chapter-select');
+const elChTitle       = document.getElementById('chapter-title');
+const elImg           = document.getElementById('comic-img');
+const elStatus        = document.getElementById('status-msg');
+const elFootCtr       = document.getElementById('foot-counter');
+const elPartsList     = document.getElementById('parts-list');
+
+const btnMenu         = document.getElementById('btn-menu');
+const btnBack         = document.getElementById('btn-back');
+const sidebar         = document.getElementById('sidebar');
+const overlay         = document.getElementById('sidebar-overlay');
+const btnCloseSB      = document.getElementById('btn-close-sidebar');
+// Arrow buttons live in the footer — close to the image, easy thumb reach
+const footPrev        = document.getElementById('foot-prev');
+const footNext        = document.getElementById('foot-next');
+const gotoInput       = document.getElementById('goto-input');
+const gotoBtn         = document.getElementById('goto-btn');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VIEW SWITCHING
+//
+// We use a CSS class on <body> to toggle which view and which nav is visible.
+// This keeps all layout logic in CSS — JS just sets/removes the class.
+// ═══════════════════════════════════════════════════════════════════════════
+function showLanding() {
+  document.body.classList.remove('in-reader');
+  closeSidebar();
+}
+
+function showReader(chapterIndex) {
+  state.chapterIndex = chapterIndex;
+  state.pageIndex    = 0;
+  document.body.classList.add('in-reader');
+  buildPartsList();
+  render();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SIDEBAR
+// ═══════════════════════════════════════════════════════════════════════════
+function openSidebar()  { sidebar.classList.add('open');  overlay.classList.add('open');  }
+function closeSidebar() { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
+
+btnMenu.addEventListener('click', openSidebar);
+btnCloseSB.addEventListener('click', closeSidebar);
+overlay.addEventListener('click', closeSidebar);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LOAD
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadAll() {
+  try {
+    const [cfgRes, partsRes] = await Promise.all([
+      fetch('config.json'),
+      fetch('parts.csv'),
+    ]);
+    if (!cfgRes.ok) throw new Error(`config.json HTTP ${cfgRes.status}`);
+    state.config = await cfgRes.json();
+    if (partsRes.ok) state.parts = parseParts(await partsRes.text());
+    init();
+  } catch (err) {
+    elStatus.textContent = `Load error: ${err.message}`;
+    elStatus.style.color = '#e55';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PARSE parts.csv  →  Map<folder, [{name, localPage}]>
+// Format: chapter-01,Part Name,1
+// ═══════════════════════════════════════════════════════════════════════════
+function parseParts(csv) {
+  const map = new Map();
+  csv.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+    .forEach(line => {
+      const first = line.indexOf(',');
+      const last  = line.lastIndexOf(',');
+      if (first === -1 || first === last) return;
+      const folder    = line.slice(0, first).trim();
+      const name      = line.slice(first + 1, last).trim();
+      const localPage = parseInt(line.slice(last + 1).trim(), 10);
+      if (!folder || !name || isNaN(localPage)) return;
+      if (!map.has(folder)) map.set(folder, []);
+      map.get(folder).push({ name, localPage });
+    });
+  return map;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GLOBAL PAGE HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+function currentGlobalPage() {
+  let g = 0;
+  for (let i = 0; i < state.chapterIndex; i++) g += state.config.chapters[i].pages.length;
+  return g + state.pageIndex + 1;
+}
+function totalGlobalPages() {
+  return state.config.chapters.reduce((s, ch) => s + ch.pages.length, 0);
+}
+function globalPageToPosition(g) {
+  let rem = g - 1;
+  for (let i = 0; i < state.config.chapters.length; i++) {
+    const len = state.config.chapters[i].pages.length;
+    if (rem < len) return { chapterIndex: i, pageIndex: rem };
+    rem -= len;
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════════════
+function init() {
+  const cfg   = state.config;
+  const title = cfg.title || 'Comic Reader';
+
+  document.title         = title;
+  elTitleLanding.textContent = title;
+  elTitleNav.textContent     = title;
+  elTitleReader.textContent  = title;
+  if (cfg.subtitle) elSubtitle.textContent = cfg.subtitle;
+
+  // Populate chapter dropdown (reader)
+  cfg.chapters.forEach((ch, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = ch.name;
+    elSelect.appendChild(opt);
+  });
+
+  // Build landing grid
+  buildGrid();
+
+  // ── Event listeners ──
+  btnBack.addEventListener('click', showLanding);
+
+  elSelect.addEventListener('change', () => {
+    state.chapterIndex = parseInt(elSelect.value, 10);
+    state.pageIndex    = 0;
+    buildPartsList();
+    render();
+  });
+
+  footPrev.addEventListener('click', () => navigate(-1));
+  footNext.addEventListener('click', () => navigate(+1));
+
+  document.addEventListener('keydown', (e) => {
+    if (!document.body.classList.contains('in-reader')) return;
+    if (document.activeElement === gotoInput) return;
+    if (e.key === 'ArrowRight') navigate(+1);
+    if (e.key === 'ArrowLeft')  navigate(-1);
+  });
+
+  gotoBtn.addEventListener('click', goToPage);
+  gotoInput.addEventListener('keydown', e => { if (e.key === 'Enter') goToPage(); });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BUILD LANDING GRID
+//
+// For each chapter we create a card with:
+//   - A thumbnail: the first image of that chapter (lazy-loaded)
+//   - Chapter name and page count
+// ═══════════════════════════════════════════════════════════════════════════
+function buildGrid() {
+  elGrid.innerHTML = '';
+  state.config.chapters.forEach((ch, i) => {
+    const thumbSrc = ch.pages[0];           // first page = thumbnail
+    const pageCount = ch.pages.length;
+
+    const card = document.createElement('div');
+    card.className = 'ch-card';
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-label', `Open ${ch.name}`);
+
+    card.innerHTML = `
+      <div class="ch-thumb">
+        <div class="ch-thumb-placeholder">&#9634;</div>
+        <img
+          src="${thumbSrc}"
+          alt="${ch.name} cover"
+          loading="lazy"
+        />
+      </div>
+      <div class="ch-info">
+        <div class="ch-name">${ch.name}</div>
+        <div class="ch-pages">${pageCount} page${pageCount !== 1 ? 's' : ''}</div>
+      </div>
+    `;
+
+    // Hide placeholder once image loads
+    const img = card.querySelector('img');
+    img.addEventListener('load', () => {
+      card.querySelector('.ch-thumb-placeholder').style.display = 'none';
+    });
+
+    // Open reader on click or Enter key
+    card.addEventListener('click', () => showReader(i));
+    card.addEventListener('keydown', e => { if (e.key === 'Enter') showReader(i); });
+
+    elGrid.appendChild(card);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BUILD PARTS LIST (sidebar — per chapter)
+// ═══════════════════════════════════════════════════════════════════════════
+function buildPartsList() {
+  elPartsList.innerHTML = '';
+  const chapter = state.config.chapters[state.chapterIndex];
+  const folder  = chapter.pages[0]?.split('/')[1] ?? '';
+  const parts   = state.parts.get(folder) ?? [];
+
+  const header = document.createElement('div');
+  header.style.cssText = 'padding:10px 16px 4px;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent2);';
+  header.textContent   = chapter.name;
+  elPartsList.appendChild(header);
+
+  if (parts.length === 0) {
+    const msg = document.createElement('p');
+    msg.style.cssText = 'padding:8px 16px;font-size:0.8rem;color:var(--muted)';
+    msg.textContent   = 'No parts for this chapter.';
+    elPartsList.appendChild(msg);
+    return;
+  }
+
+  parts.forEach((part) => {
+    const el = document.createElement('div');
+    el.className = 'part-item';
+    el.innerHTML = `
+      <span class="part-name">${part.name}</span>
+      <span class="part-sub">page ${part.localPage}</span>
+    `;
+    el.addEventListener('click', () => {
+      state.pageIndex = Math.max(0, part.localPage - 1);
+      render();
+      closeSidebar();
+    });
+    elPartsList.appendChild(el);
+  });
+}
+
+function updatePartsHighlight() {
+  const currentLocal = state.pageIndex + 1;
+  const chapter = state.config.chapters[state.chapterIndex];
+  const folder  = chapter.pages[0]?.split('/')[1] ?? '';
+  const parts   = state.parts.get(folder) ?? [];
+  const items   = elPartsList.querySelectorAll('.part-item');
+  let activeIdx = -1;
+  parts.forEach((p, i) => { if (p.localPage <= currentLocal) activeIdx = i; });
+  items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NAVIGATE
+// ═══════════════════════════════════════════════════════════════════════════
+function navigate(delta) {
+  const chapter = state.config.chapters[state.chapterIndex];
+  const total   = chapter.pages.length;
+  const next    = state.pageIndex + delta;
+  let   changed = false;
+
+  if (next >= 0 && next < total) {
+    state.pageIndex = next;
+  } else if (delta > 0 && state.chapterIndex < state.config.chapters.length - 1) {
+    state.chapterIndex++; state.pageIndex = 0; changed = true;
+  } else if (delta < 0 && state.chapterIndex > 0) {
+    state.chapterIndex--;
+    state.pageIndex = state.config.chapters[state.chapterIndex].pages.length - 1;
+    changed = true;
+  }
+  if (changed) buildPartsList();
+  render();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GO TO PAGE
+// ═══════════════════════════════════════════════════════════════════════════
+function goToPage() {
+  const val   = parseInt(gotoInput.value, 10);
+  // Validate against current chapter's page count
+  const total = state.config.chapters[state.chapterIndex].pages.length;
+  if (isNaN(val) || val < 1 || val > total) {
+    gotoInput.style.borderColor = '#e55';
+    setTimeout(() => { gotoInput.style.borderColor = ''; }, 800);
+    return;
+  }
+  state.pageIndex = val - 1;   // input is 1-based, state is 0-based
+  render();
+  gotoInput.value = '';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════════════════
+function render() {
+  const cfg     = state.config;
+  const chapter = cfg.chapters[state.chapterIndex];
+  const total   = chapter.pages.length;
+  const page    = state.pageIndex;
+
+  elChTitle.textContent = chapter.name;
+
+  const src = chapter.pages[page];
+  elImg.classList.add('loading');
+  elStatus.textContent = '';
+
+  elImg.onload = () => { elImg.classList.remove('loading'); elImg.style.display = 'block'; };
+  elImg.onerror = () => {
+    elImg.classList.remove('loading');
+    elImg.style.display  = 'none';
+    elStatus.textContent = `Image not found: ${src}`;
+  };
+  elImg.src = src;
+  elImg.alt = `${chapter.name} – page ${page + 1}`;
+
+  // Counter — local to chapter
+  elFootCtr.textContent = `${page + 1} / ${total}`;
+  gotoInput.max = total;
+
+  const atStart = state.chapterIndex === 0 && page === 0;
+  footPrev.disabled = atStart;
+
+  const atEnd = state.chapterIndex === cfg.chapters.length - 1 && page === total - 1;
+  footNext.disabled = atEnd;
+
+  elSelect.value = state.chapterIndex;
+  updatePartsHighlight();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ENTRY POINT
+// ═══════════════════════════════════════════════════════════════════════════
+loadAll();
+</script>
+</body>
+</html>

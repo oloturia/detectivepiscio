@@ -1,0 +1,59 @@
+# parts.csv — Quick navigation per chapter,,
+# Format: <chapter-folder>,<Part Name>,<local page number>
+# Local page = page number within that chapter (starts at 1).,,
+# Lines starting with # are ignored.,,
+,,
+1 - Rapine a Belluti,Copertina,1
+1 - Rapine a Belluti,Rapina a Fortebruci,2
+1 - Rapine a Belluti,Ostaggio in pericolo,17
+1 - Rapine a Belluti,Credito Uovopollo,33
+1 - Rapine a Belluti,L'interrogatorio,49
+1 - Rapine a Belluti,Missione tra i punk,65
+1 - Rapine a Belluti,Gran finale!,81
+1 - Rapine a Belluti,Epilogo,102
+1 - Rapine a Belluti,Contenuti speciali,106
+1 - Rapine a Belluti,Schede dei personaggi,124
+,,
+2 - L'inafferrabile Dr. Q,Copertina,1
+2 - L'inafferrabile Dr. Q,Lo Smirello Imperiale,2
+2 - L'inafferrabile Dr. Q,I sospettati,25
+2 - L'inafferrabile Dr. Q,Quintilio Falzarego,38
+2 - L'inafferrabile Dr. Q,Louis Qambembert,55
+2 - L'inafferrabile Dr. Q,Anna Qocilova,75
+2 - L'inafferrabile Dr. Q,L'emiro del Qarciofistan,103
+2 - L'inafferrabile Dr. Q,La bassa marea!,123
+2 - L'inafferrabile Dr. Q,Chi è il dr.Q?,154
+2 - L'inafferrabile Dr. Q,Epilogo pt.1,163
+2 - L'inafferrabile Dr. Q,Epilogo pt.2,170
+2 - L'inafferrabile Dr. Q,Contenuti speciali,174
+2 - L'inafferrabile Dr. Q,Schede dei personaggi,181
+,,
+3 - Calamito l'Improbabile,Copertina,1
+3 - Calamito l'Improbabile,Domenica,2
+3 - Calamito l'Improbabile,Lunedì,50
+3 - Calamito l'Improbabile,Martedì,66
+3 - Calamito l'Improbabile,Mercoledì,92
+3 - Calamito l'Improbabile,Giovedì,120
+3 - Calamito l'Improbabile,Venerdì,170
+3 - Calamito l'Improbabile,Sabato mattina,230
+3 - Calamito l'Improbabile,Apoteosi,278
+3 - Calamito l'Improbabile,Gran Finale,370
+3 - Calamito l'Improbabile,Epilogo 1,379
+3 - Calamito l'Improbabile,Epilogo 2,391
+3 - Calamito l'Improbabile,Epilogo 3,394
+3 - Calamito l'Improbabile,Epilogo 4,398
+3 - Calamito l'Improbabile,Epilogo 5,404
+3 - Calamito l'Improbabile,Contenuti speciali,408
+3 - Calamito l'Improbabile,Schede dei personaggi,423
+,,
+4 - Il colore della colpa,Copertina,1
+4 - Il colore della colpa,La rapina,2
+4 - Il colore della colpa,Victor Kray,18
+4 - Il colore della colpa,Elena Voss,39
+4 - Il colore della colpa,Giulia Ragno,55
+4 - Il colore della colpa,Milo Ragno,81
+4 - Il colore della colpa,Epilogo 1,108
+4 - Il colore della colpa,Epilogo 2,117
+4 - Il colore della colpa,Epilogo 3,120
+4 - Il colore della colpa,Contenuti speciali,124
+4 - Il colore della colpa,Schede dei personaggi,131
